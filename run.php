@@ -18,11 +18,74 @@ $major_markets = [
 
   'miami' => [
     'login'    => 'http://sef.rets.interealty.com/Login.asmx/Login',
-    'username' => 'MpeRaltars',
+    'username' => 'mpealtrs',
     'password' => 'ertb2942',
-    'uapassword' => '123456',
+    'uapassword' => 'fghi4921',
   ],
 ];
+
+
+
+function generate_csv($rets, $major_market, $type_name, $type_id) {
+
+  //// check for errors
+  //if (!$types) {
+    //print_r($rets->Error());
+  //}
+    //var_dump($types);
+  echo "Running Search ... ";
+  //$searching = true;
+  //while ($searching) {
+  //}
+  //echo "Running Search ... ";
+  $search_options = array(
+    "Limit" => "NONE",
+    //"Limit" => 2,
+    "Select" => "sysid",
+    //"Select" => "StreetNumber,StreetName,ListPrice,City,StateOrProvince,PostalCode",
+  );
+
+    //var_dump($rets->GetMetadataTypes()); exit;
+    //print_r($rets->GetMetadataClasses("Property")); exit;
+    //var_dump($rets->GetMetadataTable("Property", 4)); exit;
+
+  // time the search query
+  $time_start = microtime(true);
+
+  // select all properties
+  $search = $rets->SearchQuery("Property", $type_id, "(sysid=0+)", $search_options);
+
+  $time_end = microtime(true);
+  $total_time = $time_end - $time_start;
+
+  echo "  + Search took $total_time seconds and found {$rets->TotalRecordsFound()} records\n";
+
+
+  $file_name = "$type_name.csv";
+  $fh = fopen("data/$major_market/".$file_name, "w+");
+
+  echo 'Displaying results...';
+  $counter = 1;
+  while($listing = $rets->FetchRow($search)) {
+
+
+    $search2 = $rets->SearchQuery("Property", 1, "(sysid={$listing['sysid']})", ["Limit" => 1]);
+
+    if($counter == 1) {
+      // print headers
+      $fields = $rets->SearchGetFields($search2);
+      fputcsv($fh, $fields);
+    }
+
+    $property = $rets->FetchRow($search2);
+    fputcsv($fh, $property);
+
+    $counter++;
+    flush();
+  }
+
+  $rets->FreeResult($search);
+}
 
 foreach ($major_markets as $major_market  => $connection_data) {
   $login = $connection_data['login'];
@@ -32,7 +95,7 @@ foreach ($major_markets as $major_market  => $connection_data) {
   // start rets connection
   $rets = new phRETS;
 
-  $rets->AddHeader("User-Agent", 'RETS-Connector/1.2');
+  $rets->AddHeader("User-Agent", 'PHRETS/1.0');
 
   // Uncomment and change the following if you're connecting to a server that supports a version other than RETS 1.5
   //$rets->AddHeader("RETS-Version", "RETS/1.7.2");
@@ -55,85 +118,26 @@ foreach ($major_markets as $major_market  => $connection_data) {
   }
 
   $meta_data_types = $rets->GetMetadataTypes();
-  echo 'aa';
-  exit;
 
-  //// filter out everything other than property
-  //foreach ($meta_data_types as $data_type) {
-    //if $data_type[
-  //}
+  //var_dump($meta_data_types);exit;
 
-
-
-  $property_types = [
-    "single_family" => 1,
-  ];
-
-  foreach($property_types as $property_type_name => $property_type_id) {
-    generate_csv($rets, $major_market, $property_type_name, $property_type_id);
+  // filter out everything other than property
+  $property_types = [];
+  foreach ($meta_data_types as $data_type) {
+    if($data_type['Resource'] == 'Property') {
+      foreach($data_type['Data'] as $property_type) {
+          $property_types[] = strtolower(preg_replace("/[^A-Za-z]/", '_', $property_type['StandardName']));
+      }
+    }
   }
 
-  function generate_csv($rets, $major_market, $type_name, $type_id) {
-
-    //// check for errors
-    //if (!$types) {
-      //print_r($rets->Error());
-    //}
-      //var_dump($types);
-    echo "Running Search ... ";
-    //$searching = true;
-    //while ($searching) {
-    //}
-    //echo "Running Search ... ";
-    $search_options = array(
-      //"Limit" => "NONE",
-      "Limit" => 2,
-      "Select" => "sysid",
-      //"Select" => "StreetNumber,StreetName,ListPrice,City,StateOrProvince,PostalCode",
-    );
-
-      //var_dump($rets->GetMetadataTypes()); exit;
-      //print_r($rets->GetMetadataClasses("Property")); exit;
-      //var_dump($rets->GetMetadataTable("Property", 4)); exit;
-
-    // time the search query
-    $time_start = microtime(true);
-
-    // select all properties
-    $search = $rets->SearchQuery("Property", $type_id, "(sysid=0+)", $search_options);
-
-    $time_end = microtime(true);
-    $total_time = $time_end - $time_start;
-
-    echo "  + Search took $total_time seconds and found {$rets->TotalRecordsFound()} records\n";
+  $property_type_ids = [
+    "residential" => 1,
+  ];
 
 
-    $file_name = "$type_name.csv";
-    $fh = fopen("data/$major_market/".$file_name, "w+");
-
-    echo 'Displaying results...';
-    $counter = 1;
-    while($listing = $rets->FetchRow($search)) {
-
-
-      $search2 = $rets->SearchQuery("Property", 1, "(sysid={$listing['sysid']})", ["Limit" => 1]);
-
-      if($counter == 1) {
-        // print headers
-        $fields = $rets->SearchGetFields($search2);
-        fputcsv($fh, $fields);
-      }
-
-      $property = $rets->FetchRow($search2);
-      fputcsv($fh, $property);
-
-      $counter++;
-      flush();
-    }
-
-    $rets->FreeResult($search);
-    $rets->FreeResult($search2);
-
+  foreach($property_type_ids as $property_type_name => $property_type_id) {
+    generate_csv($rets, $major_market, $property_type_name, $property_type_id);
   }
 
   echo "+ Disconnecting\n";
